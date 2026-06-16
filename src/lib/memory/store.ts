@@ -162,8 +162,10 @@ export async function createMemory(
 
   // Check for existing memory with same apiKeyId + key (UPSERT logic)
   const existing = memory.key ? findExistingMemory(db, memory.apiKeyId, memory.key) : undefined;
+  const sameTickCreateCollision =
+    existing && String(existing.created_at) === now && String(existing.content) === memory.content;
 
-  if (existing) {
+  if (existing && !sameTickCreateCollision) {
     // UPDATE existing record
     const updatedMetadata = { ...parseJSON(existing.metadata), ...memory.metadata };
     const stmt = db.prepare(
@@ -384,8 +386,7 @@ export async function updateMemory(
   invalidateMemoryCache(id);
 
   // Regenerate vector if content or key changed (fire-and-forget)
-  const contentChanged =
-    updates.content !== undefined && updates.content !== currentRow?.content;
+  const contentChanged = updates.content !== undefined && updates.content !== currentRow?.content;
   const keyChanged = updates.key !== undefined && updates.key !== currentRow?.key;
 
   if (contentChanged || keyChanged) {

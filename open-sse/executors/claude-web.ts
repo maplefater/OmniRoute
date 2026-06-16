@@ -195,6 +195,13 @@ function getBrowserHeaders(deviceId?: string): Record<string, string> {
 function normalizeClaudeSessionCookie(rawValue: string): string {
   return normalizeSessionCookieHeader(rawValue, CLAUDE_SESSION_COOKIE_NAME);
 }
+
+function hasPlausibleClaudeSessionKey(cookieHeader: string): boolean {
+  const match = /(?:^|;\s*)sessionKey=([^;]+)/.exec(cookieHeader);
+  if (!match) return false;
+  const value = decodeURIComponent(match[1]).trim();
+  return value.startsWith("sk-ant-");
+}
 /**
  * Normalize cookie and auto-inject cf_clearance if missing
  */
@@ -697,6 +704,29 @@ export class ClaudeWebExecutor extends BaseExecutor {
           JSON.stringify({
             error: {
               message: "Missing session cookie",
+              type: "authentication_error",
+            },
+          }),
+          {
+            status: 401,
+            statusText: "Unauthorized",
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+        return {
+          response: errorResp,
+          url: "",
+          headers: {},
+          transformedBody: bodyObj,
+        };
+      }
+
+      const normalizedRawCookie = normalizeClaudeSessionCookie(rawCookie);
+      if (!hasPlausibleClaudeSessionKey(normalizedRawCookie)) {
+        const errorResp = new Response(
+          JSON.stringify({
+            error: {
+              message: "Invalid Claude Web session cookie",
               type: "authentication_error",
             },
           }),

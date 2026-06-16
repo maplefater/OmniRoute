@@ -41,18 +41,27 @@ export function initBatchProcessor() {
   if (pollInterval) return pollInterval;
   console.log("[BATCH] Initializing batch processor polling...");
 
-  pollInterval = setInterval(async (): Promise<void> => {
-    if (isProcessing) return;
-    try {
-      isProcessing = true;
-      await processPendingBatches();
-    } catch (err) {
-      console.error("[BATCH] Polling error:", err);
-    } finally {
-      isProcessing = false;
-    }
+  pollInterval = setInterval(() => {
+    kickBatchProcessor();
   }, 10000); // Poll every 10s
   return pollInterval;
+}
+
+export function kickBatchProcessor(): void {
+  if (isProcessing) return;
+  void runProcessorTick();
+}
+
+async function runProcessorTick(): Promise<void> {
+  if (isProcessing) return;
+  try {
+    isProcessing = true;
+    await processPendingBatches();
+  } catch (err) {
+    console.error("[BATCH] Polling error:", err);
+  } finally {
+    isProcessing = false;
+  }
 }
 
 export function stopBatchProcessor(): void {

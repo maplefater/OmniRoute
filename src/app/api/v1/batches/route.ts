@@ -4,6 +4,21 @@ import { v1BatchCreateSchema } from "@/shared/validation/schemas";
 import { NextResponse } from "next/server";
 import { getApiKeyRequestScope } from "@/app/api/v1/_helpers/apiKeyScope";
 
+function isBackgroundServicesDisabled(): boolean {
+  const raw = process.env.OMNIROUTE_DISABLE_BACKGROUND_SERVICES;
+  if (!raw) return false;
+  return new Set(["1", "true", "yes", "on"]).has(raw.trim().toLowerCase());
+}
+
+async function kickBatchProcessorForCreatedBatch(): Promise<void> {
+  if (isBackgroundServicesDisabled()) return;
+
+  const { initBatchProcessor, kickBatchProcessor } =
+    await import("@omniroute/open-sse/services/batchProcessor");
+  initBatchProcessor();
+  kickBatchProcessor();
+}
+
 function formatBatchResponse(batch: any) {
   return {
     id: batch.id,
@@ -77,6 +92,8 @@ export async function POST(request: Request) {
       outputExpiresAfterSeconds: validated.output_expires_after?.seconds || null,
       outputExpiresAfterAnchor: validated.output_expires_after?.anchor || null,
     });
+
+    await kickBatchProcessorForCreatedBatch();
 
     return NextResponse.json(formatBatchResponse(batch), { headers: CORS_HEADERS });
   } catch (error) {

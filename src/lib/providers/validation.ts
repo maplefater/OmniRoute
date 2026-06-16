@@ -2934,6 +2934,15 @@ function isGrokAntiBotBlock(body: string | null | undefined): boolean {
   return false;
 }
 
+function isBareGrokCookieValue(rawValue: unknown): boolean {
+  const text = String(rawValue || "")
+    .trim()
+    .replace(/^bearer\s+/i, "")
+    .replace(/^cookie:/i, "")
+    .trim();
+  return text.length > 0 && !text.includes("=") && !text.includes(";");
+}
+
 async function validateGrokWebProvider({ apiKey, providerSpecificData = {} }: any) {
   try {
     const token = extractCookieValue(apiKey, "sso");
@@ -3018,6 +3027,32 @@ async function validateGrokWebProvider({ apiKey, providerSpecificData = {} }: an
       });
     } catch (err: any) {
       if (err instanceof TlsClientUnavailableError) {
+        if (isBareGrokCookieValue(apiKey)) {
+          try {
+            const legacyResponse = await fetch("https://grok.com/rest/app-chat/conversations/new", {
+              method: "POST",
+              headers: applyCustomUserAgent(
+                {
+                  Accept: "*/*",
+                  "Content-Type": "application/json",
+                  Cookie: buildGrokCookieHeader(apiKey),
+                  Origin: "https://grok.com",
+                  Referer: "https://grok.com/",
+                },
+                providerSpecificData
+              ),
+              body: JSON.stringify({ temporary: true, modeId: "fast", message: "test" }),
+            });
+            if (legacyResponse.status === 401) {
+              return {
+                valid: false,
+                error: "Invalid SSO cookie — re-paste from grok.com DevTools → Cookies → sso",
+              };
+            }
+          } catch {
+            // Preserve the actionable TLS-client error below when the legacy probe cannot run.
+          }
+        }
         return {
           valid: false,
           error: `TLS impersonation client unavailable: ${err.message}`,

@@ -838,6 +838,18 @@ const resetAwareQuotaCache = new Map<
   { fetchedAt: number; quota: unknown; refreshPromise: Promise<unknown> | null }
 >();
 
+function nextRoundRobinCounter(key: string): number {
+  const counter = rrCounters.get(key) || 0;
+  if (rrCounters.has(key)) {
+    rrCounters.delete(key);
+  } else if (rrCounters.size >= MAX_RR_COUNTERS) {
+    const oldest = rrCounters.keys().next().value;
+    if (oldest !== undefined) rrCounters.delete(oldest);
+  }
+  rrCounters.set(key, counter + 1);
+  return counter;
+}
+
 /**
  * Normalize a model entry to { model, weight }
  * Supports both legacy string format and new object format
@@ -2316,12 +2328,7 @@ async function orderTargetsByResetAwareQuota(
   let orderedTiedTargets = tiedTargets;
   if (tiedTargets.length > 1) {
     const key = `reset-aware:${comboName}`;
-    const counter = rrCounters.get(key) || 0;
-    if (!rrCounters.has(key) && rrCounters.size >= MAX_RR_COUNTERS) {
-      const oldest = rrCounters.keys().next().value;
-      if (oldest !== undefined) rrCounters.delete(oldest);
-    }
-    rrCounters.set(key, counter + 1);
+    const counter = nextRoundRobinCounter(key);
     const startIndex = counter % tiedTargets.length;
     orderedTiedTargets = [...tiedTargets.slice(startIndex), ...tiedTargets.slice(0, startIndex)];
   }
@@ -2479,12 +2486,7 @@ async function orderTargetsByResetWindow(
   if (tiedTargets.length <= 1) return scoredTargets.map((entry) => entry.target);
 
   const key = `reset-window:${comboName}`;
-  const counter = rrCounters.get(key) || 0;
-  if (!rrCounters.has(key) && rrCounters.size >= MAX_RR_COUNTERS) {
-    const oldest = rrCounters.keys().next().value;
-    if (oldest !== undefined) rrCounters.delete(oldest);
-  }
-  rrCounters.set(key, counter + 1);
+  const counter = nextRoundRobinCounter(key);
   const startIndex = counter % tiedTargets.length;
   const orderedTiedTargets = [
     ...tiedTargets.slice(startIndex),
@@ -4701,12 +4703,7 @@ async function handleRoundRobinCombo({
   );
 
   // Get and increment atomic counter
-  const counter = rrCounters.get(combo.name) || 0;
-  if (!rrCounters.has(combo.name) && rrCounters.size >= MAX_RR_COUNTERS) {
-    const oldest = rrCounters.keys().next().value;
-    if (oldest !== undefined) rrCounters.delete(oldest);
-  }
-  rrCounters.set(combo.name, counter + 1);
+  const counter = nextRoundRobinCounter(combo.name);
   const startIndex = counter % modelCount;
 
   const clientRequestedStream = body?.stream === true;

@@ -3,7 +3,7 @@
 // Issue #3501 Phase 1c — extracted from the god-component.
 // ~1091-LOC modal for editing an existing provider connection.
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useLayoutEffect, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { Button, Badge, Input, Modal, Toggle, Select } from "@/shared/components";
 import {
@@ -192,7 +192,7 @@ export default function EditConnectionModal({
     [t]
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isOpen && connection) {
       const rawBaseUrl = connection.providerSpecificData?.baseUrl;
       const existingBaseUrl = typeof rawBaseUrl === "string" ? rawBaseUrl : "";

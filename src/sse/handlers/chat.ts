@@ -237,6 +237,9 @@ export async function handleChat(request: any, clientRawRequest: any = null) {
   const apiKey = extractApiKey(request);
   if (authHeader && apiKey) {
     log.debug("AUTH", `API Key: ${log.maskKey(apiKey)}`);
+    if (!(await isValidApiKey(apiKey))) {
+      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
+    }
   } else {
     log.debug("AUTH", "No API key provided (local mode)");
   }

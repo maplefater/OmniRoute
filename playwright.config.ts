@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { existsSync } from "node:fs";
 
 const dashboardPort = process.env.DASHBOARD_PORT || process.env.PORT || "20128";
 const dashboardBaseUrl = `http://localhost:${dashboardPort}`;
@@ -8,6 +9,27 @@ const playwrightWebServerTimeout = Number.parseInt(
   process.env.OMNIROUTE_PLAYWRIGHT_WEB_SERVER_TIMEOUT || "900000",
   10
 );
+
+export function resolveChromiumChannel(
+  env: Record<string, string | undefined> = process.env,
+  exists: (path: string) => boolean = existsSync
+): string | undefined {
+  const configured =
+    env.OMNIROUTE_PLAYWRIGHT_CHROMIUM_CHANNEL?.trim() || env.PLAYWRIGHT_CHROMIUM_CHANNEL?.trim();
+  if (configured) return configured;
+
+  if (exists("/usr/bin/google-chrome") || exists("/usr/bin/google-chrome-stable")) {
+    return "chrome";
+  }
+
+  return undefined;
+}
+
+const chromiumChannel = resolveChromiumChannel();
+const chromiumUse = {
+  ...devices["Desktop Chrome"],
+  ...(chromiumChannel ? { channel: chromiumChannel } : {}),
+};
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -50,7 +72,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: chromiumUse,
     },
   ],
   webServer: {

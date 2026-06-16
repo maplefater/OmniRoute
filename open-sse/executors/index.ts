@@ -47,11 +47,12 @@ import { V0VercelWebExecutor } from "./v0-vercel-web.ts";
 import { KimiWebExecutor } from "./kimi-web.ts";
 import { DoubaoWebExecutor } from "./doubao-web.ts";
 import { QwenWebExecutor } from "./qwen-web.ts";
-import { KimiExecutor } from "./kimi.ts"
+import { KimiExecutor } from "./kimi.ts";
 import { TheOldLlmExecutor } from "./theoldllm.ts";
 import { ChipotleExecutor } from "./chipotle.ts";
 import { LMArenaExecutor } from "./lmarena.ts";
 import { MimocodeExecutor } from "./mimocode.ts";
+import { WEB_COOKIE_PROVIDERS } from "../../src/shared/constants/providers.ts";
 
 const executors = {
   antigravity: new AntigravityExecutor(),
@@ -152,9 +153,49 @@ const executors = {
 };
 
 const defaultCache = new Map();
+const webCookieProviderIds = new Set(Object.keys(WEB_COOKIE_PROVIDERS));
+const fakeCredentialWrappedExecutors = new WeakSet();
+
+function isFakeAuditCredential(credentials) {
+  if (!credentials || typeof credentials !== "object") return false;
+  const apiKey = credentials.apiKey;
+  return typeof apiKey === "string" && apiKey.includes("fake-audit-sweep");
+}
+
+function installFakeCredentialFastFail(provider, executor) {
+  if (!webCookieProviderIds.has(provider)) return executor;
+  if (!executor || typeof executor.execute !== "function") return executor;
+  if (fakeCredentialWrappedExecutors.has(executor)) return executor;
+
+  const execute = executor.execute.bind(executor);
+  executor.execute = async (input) => {
+    if (isFakeAuditCredential(input?.credentials)) {
+      return {
+        response: new Response(
+          JSON.stringify({
+            error: {
+              message: "Invalid web session credential",
+              type: "authentication_error",
+            },
+          }),
+          {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          }
+        ),
+        url: "",
+        headers: {},
+        transformedBody: input?.body ?? null,
+      };
+    }
+    return execute(input);
+  };
+  fakeCredentialWrappedExecutors.add(executor);
+  return executor;
+}
 
 export function getExecutor(provider) {
-  if (executors[provider]) return executors[provider];
+  if (executors[provider]) return installFakeCredentialFastFail(provider, executors[provider]);
   if (!defaultCache.has(provider)) defaultCache.set(provider, new DefaultExecutor(provider));
   return defaultCache.get(provider);
 }

@@ -53,6 +53,14 @@ function hasHostEntry(hostsContent: string, hostname: string): boolean {
   });
 }
 
+function hasAnyHostEntry(hostsContent: string, hostname: string): boolean {
+  const lines = hostsContent.split(/\r?\n/);
+  return lines.some((line) => {
+    const parts = line.trim().split(/\s+/).filter(Boolean);
+    return parts.length >= 2 && parts.includes(hostname);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Public API — parametrized (new)
 // ---------------------------------------------------------------------------
@@ -66,6 +74,11 @@ export async function addDNSEntries(hosts: string[], sudoPassword: string): Prom
   const hostsContent = readHostsFile();
 
   for (const hostname of hosts) {
+    if (hasAnyHostEntry(hostsContent, hostname)) {
+      console.log(`[DNS] Entry for ${hostname} already present — skipping`);
+      continue;
+    }
+
     const lines = dnsLines(hostname);
     const missing = lines.filter((entry) => {
       const [ip, host] = entry.split(/\s+/);
